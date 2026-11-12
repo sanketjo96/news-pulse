@@ -1,11 +1,23 @@
 // Adds a short, simple summary ("explain it like I'm 15") to news stories and search trends,
-// written by an OpenAI model from the headline plus related headlines from other outlets.
+// written by an LLM from the headline plus related headlines from other outlets.
+// - Provider: Groq (free tier) when GROQ_API_KEY is set, otherwise OpenAI when OPENAI_API_KEY is set.
+//   Groq's API is OpenAI-compatible, so the same SDK is used with a different base URL.
 // - Summaries are memoized per item, so a story or trend that stays up is summarized once.
-// - Without OPENAI_API_KEY this is a no-op; the UI then shows no summary for news and the
+// - Without a key this is a no-op; the UI then shows no summary for news and the
 //   top related headline for trends.
 import OpenAI from 'openai';
 
-const MODEL = process.env.OPENAI_MODEL || 'gpt-5.4-mini';
+const PROVIDER = process.env.GROQ_API_KEY
+  ? {
+      name: 'groq',
+      apiKey: process.env.GROQ_API_KEY,
+      baseURL: 'https://api.groq.com/openai/v1',
+      model: process.env.GROQ_MODEL || 'openai/gpt-oss-120b',
+    }
+  : process.env.OPENAI_API_KEY
+    ? { name: 'openai', apiKey: process.env.OPENAI_API_KEY, model: process.env.OPENAI_MODEL || 'gpt-5.4-mini' }
+    : null;
+const BATCH = 10; // keep each request small enough for free-tier tokens-per-minute limits
 const memo = new Map(); // "kind:title" -> summary
 
 const keyOf = (kind, item) => `${kind}:${item.title.toLowerCase().replace(/\s+/g, ' ').trim()}`;
@@ -63,55 +75,75 @@ export async function addSummaries(groups) {
   };
   apply();
 
-  if (!process.env.OPENAI_API_KEY) return { generated: 0, skipped: 'OPENAI_API_KEY not set' };
+  if (!PROVIDER) return { generated: 0, skipped: 'no GROQ_API_KEY or OPENAI_API_KEY set' };
 
   const todo = [...new Map(entries.filter(({ item }) => !item.summary).map((e) => [keyOf(e.kind, e.item), e])).values()];
-  if (!todo.length) return { generated: 0 };
+  if (!todo.length) return { generated: 0, provider: PROVIDER.name };
 
-  const client = new OpenAI();
+  const client = new OpenAI({ apiKey: PROVIDER.apiKey, baseURL: PROVIDER.baseURL });
+  let generated = 0;
+  for (let start = 0; start < todo.length; start += BATCH) {
+    const batch = todo.slice(start, start + BATCH);
+    const result = await summarizeBatch(client, batch);
+    if (!result) break; // error already logged; remaining items are retried on the next run
+    for (const { id, summary } of result) {
+      const e = batch[id];
+      if (e && summary?.trim()) {
+        memo.set(keyOf(e.kind, e.item), summary.trim());
+        generated++;
+      }
+    }
+  }
+  apply();
+  return { generated, pending: todo.length - generated, provider: PROVIDER.name, model: PROVIDER.model };
+}
+
+async function summarizeBatch(client, batch) {
+  const input = JSON.stringify(batch.map(({ kind, item }, id) => ({ id, kind, title: item.title, related: item.related ?? [] })));
+  const request = (responseFormat, extraSystem = '') =>
+    client.chat.completions.create({
+      model: PROVIDER.model,
+      messages: [
+        { role: 'system', content: SYSTEM + extraSystem },
+        { role: 'user', content: input },
+      ],
+      response_format: responseFormat,
+      // gpt-oss models on Groq are reasoning models; keep reasoning short to save free-tier tokens.
+      ...(PROVIDER.name === 'groq' && PROVIDER.model.includes('gpt-oss') ? { reasoning_effort: 'low' } : {}),
+    });
+
   let completion;
   try {
-    completion = await client.chat.completions.create({
-      model: MODEL,
-      messages: [
-        { role: 'system', content: SYSTEM },
-        {
-          role: 'user',
-          content: JSON.stringify(todo.map(({ kind, item }, id) => ({ id, kind, title: item.title, related: item.related ?? [] }))),
-        },
-      ],
-      response_format: { type: 'json_schema', json_schema: { name: 'summaries', schema: SCHEMA, strict: true } },
-    });
+    try {
+      completion = await request({ type: 'json_schema', json_schema: { name: 'summaries', schema: SCHEMA, strict: true } });
+    } catch (err) {
+      // Some models don't support strict JSON schema; fall back to plain JSON mode.
+      if (!(err instanceof OpenAI.BadRequestError)) throw err;
+      console.warn(`[summaries] json_schema not accepted (${err.message}); retrying with json_object`);
+      completion = await request(
+        { type: 'json_object' },
+        '\n\nRespond with JSON only, exactly in this shape: {"summaries":[{"id":0,"summary":"..."}]}',
+      );
+    }
   } catch (err) {
-    if (err instanceof OpenAI.AuthenticationError) console.error('[summaries] invalid OPENAI_API_KEY');
-    else if (err instanceof OpenAI.RateLimitError) console.error(`[summaries] 429 from OpenAI (${err.code || 'rate_limit'}): ${err.message}`);
-    else if (err instanceof OpenAI.NotFoundError) console.error(`[summaries] model "${MODEL}" not available - set OPENAI_MODEL`);
-    else if (err instanceof OpenAI.APIError) console.error(`[summaries] API error ${err.status}: ${err.message}`);
+    const who = PROVIDER.name === 'groq' ? 'Groq' : 'OpenAI';
+    if (err instanceof OpenAI.AuthenticationError) console.error(`[summaries] invalid ${who} API key`);
+    else if (err instanceof OpenAI.RateLimitError) console.error(`[summaries] 429 from ${who} (${err.code || 'rate_limit'}): ${err.message}`);
+    else if (err instanceof OpenAI.NotFoundError) console.error(`[summaries] model "${PROVIDER.model}" not available on ${who}`);
+    else if (err instanceof OpenAI.APIError) console.error(`[summaries] ${who} API error ${err.status}: ${err.message}`);
     else console.error('[summaries]', err.message);
-    return { generated: 0, error: true };
+    return null;
   }
 
   const msg = completion.choices?.[0]?.message;
   if (msg?.refusal) {
     console.error('[summaries] request refused:', msg.refusal);
-    return { generated: 0, error: true };
+    return null;
   }
-  let parsed;
   try {
-    parsed = JSON.parse(msg?.content ?? '');
+    return JSON.parse(msg?.content ?? '').summaries ?? [];
   } catch {
     console.error('[summaries] could not parse response (finish_reason:', completion.choices?.[0]?.finish_reason + ')');
-    return { generated: 0, error: true };
+    return null;
   }
-
-  let generated = 0;
-  for (const { id, summary } of parsed.summaries ?? []) {
-    const e = todo[id];
-    if (e && summary?.trim()) {
-      memo.set(keyOf(e.kind, e.item), summary.trim());
-      generated++;
-    }
-  }
-  apply();
-  return { generated, model: MODEL };
 }
