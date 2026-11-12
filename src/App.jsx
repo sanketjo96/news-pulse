@@ -3,37 +3,55 @@ import { useCallback, useEffect, useState } from 'react';
 const AUTO_REFRESH_MS = 15 * 60 * 1000;
 
 const NEWS = [
-  { key: 'newsWorld', title: 'World' },
-  { key: 'newsIndia', title: 'India' },
-  { key: 'newsLocal', title: 'Pune & Mumbai' },
+  { key: 'newsWorld', title: 'World', kicker: 'Global' },
+  { key: 'newsIndia', title: 'India', kicker: 'National' },
+  { key: 'newsLocal', title: 'Pune & Mumbai', kicker: 'Local' },
 ];
 const TRENDS = [
-  { key: 'trendsWorld', title: 'Worldwide', note: 'Combined from 14 countries' },
-  { key: 'trendsIndia', title: 'India' },
-  { key: 'trendsMaharashtra', title: 'Maharashtra' },
+  { key: 'trendsWorld', title: 'Worldwide', kicker: 'Across 14 countries' },
+  { key: 'trendsIndia', title: 'India', kicker: 'Nationwide' },
+  { key: 'trendsMaharashtra', title: 'Maharashtra', kicker: 'State' },
 ];
 
 function timeAgo(dateStr) {
   const t = new Date(dateStr).getTime();
   if (!t) return '';
   const mins = Math.max(0, Math.round((Date.now() - t) / 60000));
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins} min ago`;
   const h = Math.round(mins / 60);
-  return h < 24 ? `${h}h ago` : `${Math.round(h / 24)}d ago`;
+  return h < 24 ? `${h} hr ago` : `${Math.round(h / 24)}d ago`;
 }
 
-function Card({ title, note, section, loading, children }) {
+function RefreshIcon({ spinning }) {
   return (
-    <section className="card">
-      <header className="card-head">
+    <svg className={spinning ? 'spin' : ''} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+      <path d="M21 3v6h-6" />
+    </svg>
+  );
+}
+
+function Skeleton({ rows = 5 }) {
+  return (
+    <div className="skeleton" aria-hidden="true">
+      {Array.from({ length: rows }, (_, i) => <div key={i} className={i === 0 ? 'lead' : ''} />)}
+    </div>
+  );
+}
+
+function Panel({ title, kicker, section, loading, rows, children }) {
+  return (
+    <section className="panel">
+      <header className="panel-head">
+        <span className="kicker">{kicker}</span>
         <h3>{title}</h3>
-        {note && <span className="note">{note}</span>}
-        {section?.stale && <span className="badge warn">stale</span>}
+        {section?.stale && <span className="stale" title="Latest refresh failed; showing previous data">Earlier data</span>}
       </header>
       {loading && !section ? (
-        <div className="skeleton">{Array.from({ length: 5 }, (_, i) => <div key={i} />)}</div>
+        <Skeleton rows={rows} />
       ) : section?.error && !section.items?.length ? (
-        <p className="error">Couldn't load: {section.error}</p>
+        <p className="empty">Couldn’t load this section right now.</p>
       ) : (
         children
       )}
@@ -41,40 +59,71 @@ function Card({ title, note, section, loading, children }) {
   );
 }
 
-function NewsList({ items = [] }) {
+function Meta({ story }) {
   return (
-    <ol className="list">
-      {items.map((n, i) => (
-        <li key={n.link || i}>
-          <a href={n.link} target="_blank" rel="noreferrer">{n.title}</a>
-          <div className="meta">
-            {n.city && <span className="badge">{n.city}</span>}
-            <span>{n.source}</span>
-            {n.published && <span>· {timeAgo(n.published)}</span>}
-          </div>
-        </li>
-      ))}
-    </ol>
+    <div className="meta">
+      {story.city && <span className={`city city-${story.city.toLowerCase()}`}>{story.city}</span>}
+      <span className="source">{story.source}</span>
+      {story.published && <><span className="dot" aria-hidden="true">·</span><time dateTime={new Date(story.published).toISOString()}>{timeAgo(story.published)}</time></>}
+    </div>
   );
 }
 
-function TrendList({ items = [] }) {
+function NewsList({ items = [] }) {
+  const [lead, ...rest] = items;
+  if (!lead) return <p className="empty">No stories right now.</p>;
   return (
-    <ol className="list trends">
+    <div className="news">
+      <article className="story lead">
+        <a href={lead.link} target="_blank" rel="noreferrer"><h4>{lead.title}</h4></a>
+        <Meta story={lead} />
+      </article>
+      <ol className="stories">
+        {rest.map((n, i) => (
+          <li key={n.link || i} className="story">
+            <a href={n.link} target="_blank" rel="noreferrer"><h4>{n.title}</h4></a>
+            <Meta story={n} />
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+function Thumb({ src, label }) {
+  const [failed, setFailed] = useState(false);
+  if (!src || failed) return <div className="thumb placeholder" aria-hidden="true">{label.charAt(0).toUpperCase()}</div>;
+  return <img className="thumb" src={src} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(true)} />;
+}
+
+function TrendList({ items = [] }) {
+  if (!items.length) return <p className="empty">No trends right now.</p>;
+  const max = Math.max(...items.map((t) => t.trafficNum || 0), 1);
+  return (
+    <ol className="trends">
       {items.map((t, i) => (
-        <li key={t.title + i}>
-          <div className="trend-row">
-            <a href={`https://www.google.com/search?q=${encodeURIComponent(t.title)}`} target="_blank" rel="noreferrer" className="trend-title">
-              {t.title}
-            </a>
-            <span className="traffic">{t.traffic}</span>
+        <li key={t.title + i} className="trend">
+          <span className="rank">{i + 1}</span>
+          <Thumb src={t.picture} label={t.title} />
+          <div className="trend-body">
+            <div className="trend-top">
+              <a className="trend-title" href={`https://www.google.com/search?q=${encodeURIComponent(t.title)}`} target="_blank" rel="noreferrer">
+                {t.title}
+              </a>
+              <span className="volume">{(t.traffic || '').split(' · ')[0]}</span>
+            </div>
+            <div className="bar" aria-hidden="true"><span style={{ width: `${Math.max(6, (t.trafficNum / max) * 100)}%` }} /></div>
+            {t.newsTitle && (
+              <a className="related" href={t.newsLink} target="_blank" rel="noreferrer" title={t.newsTitle}>
+                {t.newsTitle}
+              </a>
+            )}
+            {t.geos?.length > 1 && (
+              <div className="geos">
+                {t.geos.map((g) => <span key={g}>{g}</span>)}
+              </div>
+            )}
           </div>
-          {t.newsTitle && (
-            <a className="meta related" href={t.newsLink} target="_blank" rel="noreferrer">
-              {t.newsTitle}{t.newsSource ? ` — ${t.newsSource}` : ''}
-            </a>
-          )}
-          {t.geos?.length > 1 && <div className="meta">{t.geos.map((g) => <span key={g} className="badge">{g}</span>)}</div>}
         </li>
       ))}
     </ol>
@@ -111,40 +160,70 @@ export default function App() {
   }, [load]);
 
   const updated = data && Math.max(...Object.values(data).map((s) => s.updatedAt || 0));
+  const today = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
   return (
-    <div className="app">
-      <header className="top">
-        <div>
-          <h1>News Pulse</h1>
-          <p className="sub">
-            {updated ? `Updated ${new Date(updated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Loading…'}
-          </p>
+    <>
+      <header className="masthead">
+        <div className="wrap masthead-inner">
+          <div className="brand">
+            <span className="logo" aria-hidden="true" />
+            <span className="wordmark">News Pulse</span>
+          </div>
+          <nav className="nav" aria-label="Sections">
+            <a href="#news">Top stories</a>
+            <a href="#trending">Trending</a>
+          </nav>
+          <button className="refresh" onClick={() => load(true)} disabled={loading} aria-label="Refresh">
+            <RefreshIcon spinning={loading} />
+            <span>{loading ? 'Updating' : 'Refresh'}</span>
+          </button>
         </div>
-        <button onClick={() => load(true)} disabled={loading}>{loading ? 'Refreshing…' : 'Refresh'}</button>
       </header>
 
-      {error && <p className="error banner">Couldn't load data: {error}</p>}
+      <main className="wrap">
+        <div className="dateline">
+          <p className="date">{today}</p>
+          <p className="updated">
+            <span className="live" aria-hidden="true" />
+            {updated ? `Updated ${timeAgo(updated)}` : 'Fetching the latest…'}
+          </p>
+        </div>
 
-      <h2>Top 5 news</h2>
-      <div className="grid">
-        {NEWS.map((s) => (
-          <Card key={s.key} title={s.title} section={data?.[s.key]} loading={loading}>
-            <NewsList items={data?.[s.key]?.items} />
-          </Card>
-        ))}
-      </div>
+        {error && <p className="banner">Couldn’t load the latest data ({error}). Try refreshing in a moment.</p>}
 
-      <h2>Top 10 trending searches</h2>
-      <div className="grid">
-        {TRENDS.map((s) => (
-          <Card key={s.key} title={s.title} note={s.note} section={data?.[s.key]} loading={loading}>
-            <TrendList items={data?.[s.key]?.items} />
-          </Card>
-        ))}
-      </div>
+        <section id="news" className="block">
+          <div className="block-head">
+            <h2>Top stories</h2>
+            <p>The five biggest headlines in each region</p>
+          </div>
+          <div className="grid">
+            {NEWS.map((s) => (
+              <Panel key={s.key} {...s} section={data?.[s.key]} loading={loading} rows={5}>
+                <NewsList items={data?.[s.key]?.items} />
+              </Panel>
+            ))}
+          </div>
+        </section>
 
-      <footer>Sources: Google News RSS · Google Trends “Trending now”</footer>
-    </div>
+        <section id="trending" className="block">
+          <div className="block-head">
+            <h2>Trending searches</h2>
+            <p>What people are searching for on Google right now</p>
+          </div>
+          <div className="grid">
+            {TRENDS.map((s) => (
+              <Panel key={s.key} {...s} section={data?.[s.key]} loading={loading} rows={8}>
+                <TrendList items={data?.[s.key]?.items} />
+              </Panel>
+            ))}
+          </div>
+        </section>
+      </main>
+
+      <footer className="wrap footer">
+        <p>Headlines from Google News · Searches from Google Trends · Refreshed every 30 minutes</p>
+      </footer>
+    </>
   );
 }

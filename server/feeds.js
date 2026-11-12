@@ -73,6 +73,7 @@ function toTrend(item, geo) {
   return {
     title: text(item.title),
     trafficNum: parseTraffic(text(item['ht:approx_traffic'])),
+    picture: text(item['ht:picture']),
     newsTitle: news ? text(news['ht:news_item_title']) : '',
     newsLink: news ? text(news['ht:news_item_url']) : '',
     newsSource: news ? text(news['ht:news_item_source']) : '',
@@ -100,6 +101,7 @@ export async function getWorldTrends(n = 10) {
       else {
         if (!cur.geos.includes(t.geos[0])) cur.geos.push(t.geos[0]);
         cur.trafficNum += t.trafficNum;
+        if (!cur.picture && t.picture) cur.picture = t.picture;
         if (!cur.newsLink && t.newsLink) Object.assign(cur, { newsTitle: t.newsTitle, newsLink: t.newsLink, newsSource: t.newsSource });
       }
     }
