@@ -28,8 +28,10 @@ for (const [key, fn] of Object.entries(SECTIONS)) {
 
 const keysOf = (prefix) => Object.keys(out).filter((k) => k.startsWith(prefix));
 const pick = (src, prefix) => keysOf(prefix).flatMap((k) => src[k]?.items ?? []);
-seedSummaries({ news: pick(prev, 'news'), trend: pick(prev, 'trends') });
-const result = await addSummaries({ news: pick(out, 'news'), trend: pick(out, 'trends') });
+// News-sourced social items (Instagram / YouTube "viral" stories) get summaries like news.
+const newsLike = (src) => [...pick(src, 'news'), ...pick(src, 'social').filter((i) => i.viaNews)];
+seedSummaries({ news: newsLike(prev), trend: pick(prev, 'trends') });
+const result = await addSummaries({ news: newsLike(out), trend: pick(out, 'trends') });
 console.log('summaries:', JSON.stringify(result));
 
 mkdirSync('public', { recursive: true });

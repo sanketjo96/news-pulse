@@ -34,7 +34,7 @@ app.get('/api/dashboard', async (req, res) => {
   const values = await Promise.all(keys.map((k) => load(k, force)));
   // Summaries are memoized per topic, so this only calls the AI model for new trends.
   const pick = (prefix) => values.filter((_, i) => keys[i].startsWith(prefix)).flatMap((v) => v.items);
-  await addSummaries({ news: pick('news'), trend: pick('trends') });
+  await addSummaries({ news: [...pick('news'), ...pick('social').filter((i) => i.viaNews)], trend: pick('trends') });
   res.json(Object.fromEntries(keys.map((k, i) => [k, values[i]])));
 });
 

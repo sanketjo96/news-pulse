@@ -209,28 +209,100 @@ function YouTubeList({ items = [] }) {
   );
 }
 
+function ViralNewsList({ items = [] }) {
+  if (!items.length) return <p className="empty">Nothing right now.</p>;
+  return (
+    <ol className="stories viral">
+      {items.map((n, i) => (
+        <li key={n.link || i} className="story">
+          <a href={n.link} target="_blank" rel="noreferrer"><h4>{n.title}</h4></a>
+          {n.summary && <p className="summary">{n.summary}</p>}
+          <Meta story={n} />
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+const SOCIAL_TABS = [
+  { id: 'x', key: 'socialX', label: 'X', note: () => 'Top trends on X in India right now' },
+  {
+    id: 'instagram',
+    key: 'socialInstagram',
+    label: 'Instagram',
+    note: () => 'Instagram doesn’t share trend data, so these are today’s news stories about what’s going viral on Instagram',
+  },
+  {
+    id: 'youtube',
+    key: 'socialYouTube',
+    label: 'YouTube',
+    note: (items) => (items?.[0]?.views != null ? 'Most popular videos in India right now' : 'Today’s news about viral YouTube videos'),
+  },
+  { id: 'bluesky', key: 'socialBluesky', label: 'Bluesky', note: () => 'Trending topics worldwide' },
+];
+
+function SocialBody({ tab, items }) {
+  if (tab.id === 'x') return <XList items={items} />;
+  if (tab.id === 'bluesky') return <BlueskyList items={items} />;
+  if (tab.id === 'youtube' && items?.[0]?.views != null) return <YouTubeList items={items} />;
+  return <ViralNewsList items={items} />;
+}
+
+const TAB_STORE = 'news-pulse:social-tab';
+
 function Social({ index, data, loading }) {
-  const cols = [
-    { key: 'socialXIndia', label: 'X · India', note: 'Trending now', List: XList },
-    { key: 'socialYouTubeIndia', label: 'YouTube · India', note: 'Most popular videos', List: YouTubeList },
-    { key: 'socialBluesky', label: 'Bluesky · Worldwide', note: 'Trending topics', List: BlueskyList },
-  ].filter((c) => (!data ? c.key !== 'socialYouTubeIndia' : data[c.key]?.items?.length)); // hide sources with no data
-  if (data && !cols.length) return null;
+  const [active, setActive] = useState(() => {
+    try {
+      return localStorage.getItem(TAB_STORE) || 'x';
+    } catch {
+      return 'x';
+    }
+  });
+  const choose = (id) => {
+    setActive(id);
+    try {
+      localStorage.setItem(TAB_STORE, id);
+    } catch {}
+  };
+  const tab = SOCIAL_TABS.find((t) => t.id === active) || SOCIAL_TABS[0];
+  const section = data?.[tab.key];
+
   return (
     <section id="social" className="region">
       <header className="region-head">
         <span className="region-num">{String(index + 1).padStart(2, '0')}</span>
         <div>
           <h2>Social media</h2>
-          <p>What people are posting and watching right now</p>
+          <p>What people are posting, sharing and watching</p>
         </div>
       </header>
-      <div className="social-grid" style={{ '--cols': cols.length }}>
-        {cols.map(({ key, label, note, List }) => (
-          <Column key={key} label={label} note={note} section={data?.[key]} loading={loading} rows={5}>
-            <List items={data?.[key]?.items} />
-          </Column>
-        ))}
+      <div className="column social-panel">
+        <div className="tabs" role="tablist" aria-label="Social platforms">
+          {SOCIAL_TABS.map((t) => (
+            <button
+              key={t.id}
+              role="tab"
+              id={`tab-${t.id}`}
+              aria-selected={t.id === tab.id}
+              aria-controls="social-tabpanel"
+              className={`tab tab-${t.id}`}
+              onClick={() => choose(t.id)}
+            >
+              <span className="tab-dot" aria-hidden="true" />
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <div id="social-tabpanel" role="tabpanel" aria-labelledby={`tab-${tab.id}`}>
+          <p className="tab-note">{tab.note(section?.items)}</p>
+          {loading && !section ? (
+            <Skeleton rows={5} />
+          ) : !section?.items?.length ? (
+            <p className="empty">Couldn’t load {tab.label} right now. It will retry on the next refresh.</p>
+          ) : (
+            <SocialBody tab={tab} items={section.items} />
+          )}
+        </div>
       </div>
     </section>
   );
@@ -328,7 +400,7 @@ export default function App() {
       </main>
 
       <footer className="wrap footer">
-        <p>Headlines: Google News · Searches: Google Trends · Social: X (via trends24.in), Bluesky, YouTube · Plain-English summaries written by AI from related headlines · Refreshed every 30 minutes</p>
+        <p>Headlines: Google News · Searches: Google Trends · Social: X (via getdaytrends.com), Google News, YouTube, Bluesky · Plain-English summaries written by AI from related headlines · Refreshed every 30 minutes</p>
       </footer>
     </>
   );

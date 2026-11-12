@@ -186,6 +186,26 @@ a.social-title:hover, .yt-row:hover .social-title { color: var(--accent); }
 .yt-row img { width: 96px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 8px; background: var(--surface-2); }
 .yt-row .social-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
+/* ---------- Social tabs ---------- */
+.social-panel { padding-top: 14px; }
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+.tab {
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 36px; padding: 0 16px; border-radius: 999px;
+  border: 1px solid var(--line); background: transparent; color: var(--text-2);
+  font: 600 14px var(--sans); cursor: pointer; transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.tab:hover { border-color: var(--muted); color: var(--text); }
+.tab[aria-selected='true'] { background: var(--text); color: var(--bg); border-color: var(--text); }
+.tab-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dot); }
+.tab-x { --dot: #64748b; }
+.tab-instagram { --dot: #e1306c; }
+.tab-youtube { --dot: #ff0000; }
+.tab-bluesky { --dot: #1185fe; }
+.tab-note { margin: 14px 0 2px; font-size: 13.5px; color: var(--muted); }
+.social-panel .stories .story:first-child { padding-top: 10px; }
+#social-tabpanel { max-width: 780px; }
+
 /* ---------- Loading ---------- */
 .skeleton { padding-top: 14px; }
 .skeleton div { height: 16px; margin: 0 0 18px; border-radius: 6px; background: var(--surface-2); animation: pulse 1.3s ease-in-out infinite; }

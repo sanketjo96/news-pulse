@@ -168,8 +168,35 @@ async function fetchXTrends(path) {
   }));
 }
 
-export async function getXTrends(path, n = 5) {
-  return dedupe(await fetchXTrends(path), n);
+// getdaytrends.com lists the same X trends; its first list on the page is the latest hour.
+async function fetchGetDayTrends(country) {
+  const res = await fetch(`https://getdaytrends.com/${country}/`, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(20000) });
+  if (!res.ok) throw new Error(`HTTP ${res.status} from getdaytrends`);
+  const html = await res.text();
+  const items = [...html.matchAll(new RegExp(`href="/${country}/trend/([^"]+?)/?"[^>]*>([^<]+)<`, 'g'))].map((m) => ({
+    title: decodeEntities(m[2].trim()),
+    link: `https://x.com/search?q=${m[1]}`,
+    platform: 'X',
+  }));
+  if (!items.length) throw new Error('getdaytrends markup changed');
+  return items;
+}
+
+export async function getXTrends(country = 'india', n = 5) {
+  try {
+    return dedupe(await fetchGetDayTrends(country), n);
+  } catch (err) {
+    console.warn(`[x] ${err.message}; trying trends24`);
+    return dedupe(await fetchXTrends(country), n);
+  }
+}
+
+// Instagram has no public trends data at all, and YouTube needs an API key, so as a stand-in
+// we show today's news coverage of what is going viral on the platform (clearly labelled in the UI).
+export async function getViralNews(platform, n = 5) {
+  const q = encodeURIComponent(`${platform} viral when:1d`);
+  const items = await fetchItems(`https://news.google.com/rss/search?q=${q}&${GN}`);
+  return dedupe(items.map((i) => toNews(i, { platform: platform, viaNews: true })), n);
 }
 
 // YouTube's official "most popular" chart for a region. Needs a free YOUTUBE_API_KEY
@@ -199,8 +226,9 @@ export const SECTIONS = {
   trendsWorld: () => getWorldTrends(),
   trendsIndia: () => getTrends('IN'),
   trendsMaharashtra: () => getTrends('IN-MH'),
+  socialX: () => getXTrends('india'),
+  socialInstagram: () => getViralNews('Instagram'),
+  // Official "most popular in India" chart with a YouTube key; otherwise news about viral videos.
+  socialYouTube: () => (process.env.YOUTUBE_API_KEY ? getYouTubeTrending('IN') : getViralNews('YouTube')),
   socialBluesky: () => getBlueskyTrends(),
-  socialXIndia: () => getXTrends('india'),
-  // Only included when a YouTube key is configured.
-  ...(process.env.YOUTUBE_API_KEY ? { socialYouTubeIndia: () => getYouTubeTrending('IN') } : {}),
 };
