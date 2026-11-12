@@ -19,6 +19,8 @@ const PROVIDER = process.env.GROQ_API_KEY
     : null;
 const BATCH = 10; // keep each request small enough for free-tier tokens-per-minute limits
 const memo = new Map(); // "kind:title" -> summary
+// Bump when the prompt changes so summaries from older deploys are rewritten instead of reused.
+const SUMMARY_VERSION = 2;
 
 const keyOf = (kind, item) => `${kind}:${item.title.toLowerCase().replace(/\s+/g, ' ').trim()}`;
 
@@ -34,6 +36,10 @@ For each item, write a summary of one or two short sentences (at most 180 charac
 
 Rules:
 - Use only facts stated in the title and related headlines. Never invent names, numbers, causes or outcomes.
+- Keep each fact exactly as precise as the headline. Do not merge separate facts into a new claim, and do not
+  add titles or roles (like "President") unless a headline states them for that person right now.
+- Only use a number if the headline makes clear what it counts (for example a tournament total vs. one match);
+  otherwise leave the number out.
 - Explain jargon and abbreviations in plain words (for example "ODI" is a one-day cricket match, "impeach" means formally charge an official).
 - Friendly and clear, but not childish. No slang, no emojis, no hype, no opinions.
 - Do not just repeat the headline; add the context a teenager would need to understand it.
@@ -60,7 +66,9 @@ const SCHEMA = {
 /** Pre-load summaries (e.g. from the previously deployed data.json). groups: { news: [...], trend: [...] } */
 export function seedSummaries(groups) {
   for (const [kind, items] of Object.entries(groups)) {
-    for (const it of items ?? []) if (it?.title && it.summary) memo.set(keyOf(kind, it), it.summary);
+    for (const it of items ?? []) {
+      if (it?.title && it.summary && it.summaryVersion === SUMMARY_VERSION) memo.set(keyOf(kind, it), it.summary);
+    }
   }
 }
 
@@ -70,7 +78,7 @@ export async function addSummaries(groups) {
   const apply = () => {
     for (const { kind, item } of entries) {
       const s = memo.get(keyOf(kind, item));
-      if (s) item.summary = s;
+      if (s) Object.assign(item, { summary: s, summaryVersion: SUMMARY_VERSION });
     }
   };
   apply();
@@ -108,8 +116,8 @@ async function summarizeBatch(client, batch) {
         { role: 'user', content: input },
       ],
       response_format: responseFormat,
-      // gpt-oss models on Groq are reasoning models; keep reasoning short to save free-tier tokens.
-      ...(PROVIDER.name === 'groq' && PROVIDER.model.includes('gpt-oss') ? { reasoning_effort: 'low' } : {}),
+      // gpt-oss models on Groq are reasoning models; medium effort noticeably improves factual care.
+      ...(PROVIDER.name === 'groq' && PROVIDER.model.includes('gpt-oss') ? { reasoning_effort: 'medium' } : {}),
     });
 
   let completion;
