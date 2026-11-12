@@ -13,8 +13,6 @@ export const FEEDS = {
   trends: (geo) => `https://trends.google.com/trending/rss?geo=${geo}`,
 };
 
-// Google Trends has no global feed; aggregate across these countries.
-export const WORLD_GEOS = ['US', 'GB', 'IN', 'CA', 'AU', 'NG', 'ZA', 'SG', 'PH', 'IE', 'DE', 'FR', 'BR', 'JP'];
 
 const asArray = (x) => (x == null ? [] : Array.isArray(x) ? x : [x]);
 const text = (x) => (typeof x === 'object' && x !== null ? x['#text'] ?? '' : x ?? '').toString().trim();
@@ -100,33 +98,6 @@ const withLabel = (t) => ({ ...t, traffic: `${formatNum(t.trafficNum)}+${t.geos.
 export async function getTrends(geo, n = 3) {
   const all = dedupe((await fetchItems(FEEDS.trends(geo))).map((i) => toTrend(i, geo)), Infinity);
   return all.sort((a, b) => b.trafficNum - a.trafficNum).slice(0, n).map(withLabel);
-}
-
-export async function getWorldTrends(n = 3) {
-  const results = await Promise.allSettled(WORLD_GEOS.map((g) => fetchItems(FEEDS.trends(g)).then((items) => items.map((i) => toTrend(i, g)))));
-  const merged = new Map();
-  for (const r of results) {
-    if (r.status !== 'fulfilled') continue;
-    for (const t of r.value) {
-      const k = norm(t.title);
-      if (!k) continue;
-      const cur = merged.get(k);
-      if (!cur) merged.set(k, { ...t });
-      else {
-        if (!cur.geos.includes(t.geos[0])) cur.geos.push(t.geos[0]);
-        cur.trafficNum += t.trafficNum;
-        if (!cur.picture && t.picture) cur.picture = t.picture;
-        cur.related = [...new Set([...cur.related, ...t.related])].slice(0, 5);
-        if (!cur.newsLink && t.newsLink) Object.assign(cur, { newsTitle: t.newsTitle, newsLink: t.newsLink, newsSource: t.newsSource });
-      }
-    }
-  }
-  if (!merged.size) throw new Error('All country trend feeds failed');
-  // Rank by number of countries first, then by combined search volume.
-  return [...merged.values()]
-    .sort((a, b) => b.geos.length - a.geos.length || b.trafficNum - a.trafficNum)
-    .slice(0, n)
-    .map(withLabel);
 }
 
 const formatNum = (v) => (v >= 1e6 ? `${+(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${+(v / 1e3).toFixed(1)}K` : `${v}`);
@@ -220,7 +191,6 @@ export const SECTIONS = {
   newsWorld: () => getNews('world'),
   newsIndia: () => getNews('india'),
   newsLocal: () => getLocalNews(),
-  trendsWorld: () => getWorldTrends(),
   trendsIndia: () => getTrends('IN'),
   trendsMaharashtra: () => getTrends('IN-MH'),
   socialX: () => getXTrends('india'),

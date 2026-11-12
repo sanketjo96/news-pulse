@@ -7,25 +7,25 @@ const REGIONS = [
   {
     id: 'world',
     name: 'World',
-    blurb: 'Global headlines and what the world is searching for',
+    blurb: 'The biggest headlines from around the world',
     news: 'newsWorld',
-    trends: 'trendsWorld',
-    trendsNote: 'Combined from 14 countries',
   },
   {
     id: 'india',
     name: 'India',
-    blurb: 'National headlines and India’s top searches',
+    blurb: 'National headlines and what Indians are searching for',
     news: 'newsIndia',
     trends: 'trendsIndia',
+    trendsNote: 'On Google, across India',
   },
   {
     id: 'maharashtra',
     name: 'Maharashtra',
-    blurb: 'Pune & Mumbai headlines and searches across the state',
+    blurb: 'Pune & Mumbai headlines and what people in Maharashtra are searching for',
     news: 'newsLocal',
     newsTitle: 'Pune & Mumbai',
     trends: 'trendsMaharashtra',
+    trendsNote: 'On Google, in Maharashtra',
   },
 ];
 
@@ -276,13 +276,15 @@ function Region({ region, index, data, loading }) {
           <p>{region.blurb}</p>
         </div>
       </header>
-      <div className="region-body">
+      <div className={`region-body${region.trends ? '' : ' single'}`}>
         <Column label={region.newsTitle ? `Top stories · ${region.newsTitle}` : 'Top stories'} section={data?.[region.news]} loading={loading} rows={5}>
           <NewsList items={data?.[region.news]?.items} />
         </Column>
-        <Column label="Trending searches" note={region.trendsNote} section={data?.[region.trends]} loading={loading} rows={5}>
+        {region.trends && (
+        <Column label="Trending searches" note={region.trendsNote} section={data?.[region.trends]} loading={loading} rows={3}>
           <TrendList items={data?.[region.trends]?.items} />
         </Column>
+        )}
       </div>
     </section>
   );

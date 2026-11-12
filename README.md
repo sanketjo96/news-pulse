@@ -1,6 +1,6 @@
 # News Pulse
 
-Organized by region (World / India / Maharashtra): top 3 news stories and top 3 trending searches each,
+Organized by region (World / India / Maharashtra): top 3 news stories each, plus top 3 Google searches from India and Maharashtra,
 plus a Social media section with X (India) trends and Instagram viral stories.
 
 - `npm run dev` — API on :3001 + Vite on :5173 (proxies `/api`)
@@ -8,8 +8,6 @@ plus a Social media section with X (India) trends and Instagram viral stories.
 
 Data: Google News RSS and Google Trends "Trending now" RSS (no API keys).
 Feeds are cached for 15 min on the server; the page auto-refreshes every 15 min.
-Worldwide trends = merged from 14 countries (see `WORLD_GEOS` in `server/feeds.js`),
-ranked by number of countries, then by combined search volume.
 
 ## GitHub Pages
 Pages is static, so `.github/workflows/deploy.yml` runs `scripts/build-data.js` to snapshot
