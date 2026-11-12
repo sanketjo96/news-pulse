@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { SECTIONS } from './feeds.js';
+import { addSummaries } from './summarize.js';
 
 const PORT = process.env.PORT || 3001;
 const TTL_MS = 15 * 60 * 1000; // refresh feeds at most every 15 minutes
@@ -31,6 +32,8 @@ app.get('/api/dashboard', async (req, res) => {
   const force = req.query.refresh === '1';
   const keys = Object.keys(SECTIONS);
   const values = await Promise.all(keys.map((k) => load(k, force)));
+  // Summaries are memoized per topic, so this only calls Claude for new trends.
+  await addSummaries(values.filter((_, i) => keys[i].startsWith('trends')).flatMap((v) => v.items));
   res.json(Object.fromEntries(keys.map((k, i) => [k, values[i]])));
 });
 

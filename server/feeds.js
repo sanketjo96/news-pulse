@@ -69,11 +69,13 @@ export function parseTraffic(s) {
 }
 
 function toTrend(item, geo) {
-  const news = asArray(item['ht:news_item'])[0];
+  const allNews = asArray(item['ht:news_item']);
+  const news = allNews[0];
   return {
     title: text(item.title),
     trafficNum: parseTraffic(text(item['ht:approx_traffic'])),
     picture: text(item['ht:picture']),
+    related: allNews.map((n) => text(n['ht:news_item_title'])).filter(Boolean).slice(0, 3),
     newsTitle: news ? text(news['ht:news_item_title']) : '',
     newsLink: news ? text(news['ht:news_item_url']) : '',
     newsSource: news ? text(news['ht:news_item_source']) : '',
@@ -83,12 +85,12 @@ function toTrend(item, geo) {
 
 const withLabel = (t) => ({ ...t, traffic: `${formatNum(t.trafficNum)}+${t.geos.length > 1 ? ` · ${t.geos.length} countries` : ''}` });
 
-export async function getTrends(geo, n = 10) {
+export async function getTrends(geo, n = 5) {
   const all = dedupe((await fetchItems(FEEDS.trends(geo))).map((i) => toTrend(i, geo)), Infinity);
   return all.sort((a, b) => b.trafficNum - a.trafficNum).slice(0, n).map(withLabel);
 }
 
-export async function getWorldTrends(n = 10) {
+export async function getWorldTrends(n = 5) {
   const results = await Promise.allSettled(WORLD_GEOS.map((g) => fetchItems(FEEDS.trends(g)).then((items) => items.map((i) => toTrend(i, g)))));
   const merged = new Map();
   for (const r of results) {
@@ -102,6 +104,7 @@ export async function getWorldTrends(n = 10) {
         if (!cur.geos.includes(t.geos[0])) cur.geos.push(t.geos[0]);
         cur.trafficNum += t.trafficNum;
         if (!cur.picture && t.picture) cur.picture = t.picture;
+        cur.related = [...new Set([...cur.related, ...t.related])].slice(0, 5);
         if (!cur.newsLink && t.newsLink) Object.assign(cur, { newsTitle: t.newsTitle, newsLink: t.newsLink, newsSource: t.newsSource });
       }
     }
@@ -116,6 +119,67 @@ export async function getWorldTrends(n = 10) {
 
 const formatNum = (v) => (v >= 1e6 ? `${+(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${+(v / 1e3).toFixed(1)}K` : `${v}`);
 
+// ---------- Social media ----------
+// Bluesky exposes trending topics publicly (no key). X/Instagram have no free trends API.
+export async function getBlueskyTrends(n = 5) {
+  const res = await fetch('https://public.api.bsky.app/xrpc/app.bsky.unspecced.getTrends?limit=10', {
+    headers: { 'User-Agent': UA },
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status} from Bluesky`);
+  const { trends = [] } = await res.json();
+  return trends.slice(0, n).map((t) => ({
+    title: t.displayName || t.topic,
+    summary: t.description || '',
+    posts: t.postCount || 0,
+    category: t.category || '',
+    status: t.status || '',
+    link: t.link ? `https://bsky.app${t.link}` : '',
+    platform: 'Bluesky',
+  }));
+}
+
+// X (Twitter) has no free trends API; trends24.in publishes them per location as public HTML.
+// Unofficial: if their markup changes, the section falls back to the last good data.
+async function fetchXTrends(path) {
+  const res = await fetch(`https://trends24.in/${path}/`, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(20000) });
+  if (!res.ok) throw new Error(`HTTP ${res.status} from trends24`);
+  const html = await res.text();
+  // The first trend card on the page is the most recent hour.
+  const card = html.match(/<ol class="?trend-card__list"?>([\s\S]*?)<\/ol>/);
+  if (!card) throw new Error('trends24 markup changed');
+  const decode = (s) => s.replace(/&amp;/g, '&').replace(/&#39;|&#x27;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+  return [...card[1].matchAll(/<a href="?([^" >]+)"?[^>]*class="?trend-link"?[^>]*>([^<]+)<\/a>/g)].map((m) => ({
+    title: decode(m[2].trim()),
+    link: decode(m[1]).replace('https://twitter.com/', 'https://x.com/'),
+    platform: 'X',
+  }));
+}
+
+export async function getXTrends(path, n = 5) {
+  return dedupe(await fetchXTrends(path), n);
+}
+
+// YouTube's official "most popular" chart for a region. Needs a free YOUTUBE_API_KEY
+// (Google Cloud console → enable "YouTube Data API v3" → create API key).
+export async function getYouTubeTrending(region = 'IN', n = 5) {
+  const key = process.env.YOUTUBE_API_KEY;
+  if (!key) throw new Error('YOUTUBE_API_KEY not set');
+  const url = `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&chart=mostPopular&regionCode=${region}&maxResults=${n}&key=${key}`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+  if (!res.ok) throw new Error(`HTTP ${res.status} from YouTube`);
+  const { items = [] } = await res.json();
+  return items.map((v) => ({
+    title: v.snippet?.title || '',
+    channel: v.snippet?.channelTitle || '',
+    views: Number(v.statistics?.viewCount || 0),
+    picture: v.snippet?.thumbnails?.medium?.url || v.snippet?.thumbnails?.default?.url || '',
+    published: v.snippet?.publishedAt || '',
+    link: `https://www.youtube.com/watch?v=${v.id}`,
+    platform: 'YouTube',
+  }));
+}
+
 export const SECTIONS = {
   newsWorld: () => getNews('world'),
   newsIndia: () => getNews('india'),
@@ -123,4 +187,8 @@ export const SECTIONS = {
   trendsWorld: () => getWorldTrends(),
   trendsIndia: () => getTrends('IN'),
   trendsMaharashtra: () => getTrends('IN-MH'),
+  socialBluesky: () => getBlueskyTrends(),
+  socialXIndia: () => getXTrends('india'),
+  // Only included when a YouTube key is configured.
+  ...(process.env.YOUTUBE_API_KEY ? { socialYouTubeIndia: () => getYouTubeTrending('IN') } : {}),
 };

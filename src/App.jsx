@@ -2,15 +2,31 @@ import { useCallback, useEffect, useState } from 'react';
 
 const AUTO_REFRESH_MS = 15 * 60 * 1000;
 
-const NEWS = [
-  { key: 'newsWorld', title: 'World', kicker: 'Global' },
-  { key: 'newsIndia', title: 'India', kicker: 'National' },
-  { key: 'newsLocal', title: 'Pune & Mumbai', kicker: 'Local' },
-];
-const TRENDS = [
-  { key: 'trendsWorld', title: 'Worldwide', kicker: 'Across 14 countries' },
-  { key: 'trendsIndia', title: 'India', kicker: 'Nationwide' },
-  { key: 'trendsMaharashtra', title: 'Maharashtra', kicker: 'State' },
+// The page is organized by region: each region shows its top stories next to what people there are searching for.
+const REGIONS = [
+  {
+    id: 'world',
+    name: 'World',
+    blurb: 'Global headlines and what the world is searching for',
+    news: 'newsWorld',
+    trends: 'trendsWorld',
+    trendsNote: 'Combined from 14 countries',
+  },
+  {
+    id: 'india',
+    name: 'India',
+    blurb: 'National headlines and India’s top searches',
+    news: 'newsIndia',
+    trends: 'trendsIndia',
+  },
+  {
+    id: 'maharashtra',
+    name: 'Maharashtra',
+    blurb: 'Pune & Mumbai headlines and searches across the state',
+    news: 'newsLocal',
+    newsTitle: 'Pune & Mumbai',
+    trends: 'trendsMaharashtra',
+  },
 ];
 
 function timeAgo(dateStr) {
@@ -40,22 +56,22 @@ function Skeleton({ rows = 5 }) {
   );
 }
 
-function Panel({ title, kicker, section, loading, rows, children }) {
+function Column({ label, note, section, loading, rows, children }) {
   return (
-    <section className="panel">
-      <header className="panel-head">
-        <span className="kicker">{kicker}</span>
-        <h3>{title}</h3>
+    <div className="column">
+      <div className="column-head">
+        <h3>{label}</h3>
+        {note && <span className="note">{note}</span>}
         {section?.stale && <span className="stale" title="Latest refresh failed; showing previous data">Earlier data</span>}
-      </header>
+      </div>
       {loading && !section ? (
         <Skeleton rows={rows} />
       ) : section?.error && !section.items?.length ? (
-        <p className="empty">Couldn’t load this section right now.</p>
+        <p className="empty">Couldn’t load this right now.</p>
       ) : (
         children
       )}
-    </section>
+    </div>
   );
 }
 
@@ -98,35 +114,145 @@ function Thumb({ src, label }) {
 
 function TrendList({ items = [] }) {
   if (!items.length) return <p className="empty">No trends right now.</p>;
-  const max = Math.max(...items.map((t) => t.trafficNum || 0), 1);
   return (
     <ol className="trends">
-      {items.map((t, i) => (
-        <li key={t.title + i} className="trend">
-          <span className="rank">{i + 1}</span>
-          <Thumb src={t.picture} label={t.title} />
-          <div className="trend-body">
-            <div className="trend-top">
-              <a className="trend-title" href={`https://www.google.com/search?q=${encodeURIComponent(t.title)}`} target="_blank" rel="noreferrer">
-                {t.title}
-              </a>
-              <span className="volume">{(t.traffic || '').split(' · ')[0]}</span>
-            </div>
-            <div className="bar" aria-hidden="true"><span style={{ width: `${Math.max(6, (t.trafficNum / max) * 100)}%` }} /></div>
-            {t.newsTitle && (
-              <a className="related" href={t.newsLink} target="_blank" rel="noreferrer" title={t.newsTitle}>
-                {t.newsTitle}
-              </a>
-            )}
-            {t.geos?.length > 1 && (
-              <div className="geos">
-                {t.geos.map((g) => <span key={g}>{g}</span>)}
+      {items.map((t, i) => {
+        const context = t.summary || t.newsTitle;
+        return (
+          <li key={t.title + i} className="trend">
+            <div className="trend-head">
+              <span className="rank">{i + 1}</span>
+              <Thumb src={t.picture} label={t.title} />
+              <div className="trend-name">
+                <a className="trend-title" href={`https://www.google.com/search?q=${encodeURIComponent(t.title)}`} target="_blank" rel="noreferrer">
+                  {t.title}
+                </a>
+                <span className="volume">
+                  {(t.traffic || '').split(' · ')[0]} searches
+                  {t.geos?.length > 1 && <> · {t.geos.join(', ')}</>}
+                </span>
               </div>
+            </div>
+            {context && <p className={`context ${t.summary ? '' : 'headline'}`}>{context}</p>}
+            {t.newsLink && (
+              <a className="read-more" href={t.newsLink} target="_blank" rel="noreferrer">
+                Read on {t.newsSource || 'source'} <span aria-hidden="true">→</span>
+              </a>
             )}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+const compact = (n) => (n >= 1e7 ? `${+(n / 1e7).toFixed(1)} Cr` : n >= 1e5 ? `${+(n / 1e5).toFixed(1)} L` : n >= 1e3 ? `${+(n / 1e3).toFixed(1)}K` : `${n}`);
+
+function XList({ items = [] }) {
+  if (!items.length) return <p className="empty">No trends right now.</p>;
+  return (
+    <ol className="social x">
+      {items.map((t, i) => (
+        <li key={t.title + i}>
+          <span className="rank">{i + 1}</span>
+          <a href={t.link} target="_blank" rel="noreferrer" className="x-tag">{t.title}</a>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function BlueskyList({ items = [] }) {
+  if (!items.length) return <p className="empty">No trends right now.</p>;
+  return (
+    <ol className="social bsky">
+      {items.map((t, i) => (
+        <li key={t.title + i}>
+          <span className="rank">{i + 1}</span>
+          <div>
+            <a href={t.link} target="_blank" rel="noreferrer" className="social-title">{t.title}</a>
+            {t.summary && <p className="context">{t.summary}</p>}
+            <div className="meta">
+              <span className="source">{compact(t.posts)} posts</span>
+              {t.category && <><span className="dot" aria-hidden="true">·</span><span className="cap">{t.category}</span></>}
+              {t.status === 'hot' && <span className="hot">Hot</span>}
+            </div>
           </div>
         </li>
       ))}
     </ol>
+  );
+}
+
+function YouTubeList({ items = [] }) {
+  if (!items.length) return <p className="empty">No videos right now.</p>;
+  return (
+    <ol className="social yt">
+      {items.map((v, i) => (
+        <li key={v.link}>
+          <a href={v.link} target="_blank" rel="noreferrer" className="yt-row">
+            <img src={v.picture} alt="" loading="lazy" referrerPolicy="no-referrer" />
+            <div>
+              <span className="social-title">{v.title}</span>
+              <div className="meta">
+                <span className="source">{v.channel}</span>
+                <span className="dot" aria-hidden="true">·</span>
+                <span>{compact(v.views)} views</span>
+              </div>
+            </div>
+          </a>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function Social({ index, data, loading }) {
+  const cols = [
+    { key: 'socialXIndia', label: 'X · India', note: 'Trending now', List: XList },
+    { key: 'socialYouTubeIndia', label: 'YouTube · India', note: 'Most popular videos', List: YouTubeList },
+    { key: 'socialBluesky', label: 'Bluesky · Worldwide', note: 'Trending topics', List: BlueskyList },
+  ].filter((c) => (!data ? c.key !== 'socialYouTubeIndia' : data[c.key]?.items?.length)); // hide sources with no data
+  if (data && !cols.length) return null;
+  return (
+    <section id="social" className="region">
+      <header className="region-head">
+        <span className="region-num">{String(index + 1).padStart(2, '0')}</span>
+        <div>
+          <h2>Social media</h2>
+          <p>What people are posting and watching right now</p>
+        </div>
+      </header>
+      <div className="social-grid" style={{ '--cols': cols.length }}>
+        {cols.map(({ key, label, note, List }) => (
+          <Column key={key} label={label} note={note} section={data?.[key]} loading={loading} rows={5}>
+            <List items={data?.[key]?.items} />
+          </Column>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function Region({ region, index, data, loading }) {
+  return (
+    <section id={region.id} className="region">
+      <header className="region-head">
+        <span className="region-num">{String(index + 1).padStart(2, '0')}</span>
+        <div>
+          <h2>{region.name}</h2>
+          <p>{region.blurb}</p>
+        </div>
+      </header>
+      <div className="region-body">
+        <Column label={region.newsTitle ? `Top stories · ${region.newsTitle}` : 'Top stories'} section={data?.[region.news]} loading={loading} rows={5}>
+          <NewsList items={data?.[region.news]?.items} />
+        </Column>
+        <Column label="Trending searches" note={region.trendsNote} section={data?.[region.trends]} loading={loading} rows={5}>
+          <TrendList items={data?.[region.trends]?.items} />
+        </Column>
+      </div>
+    </section>
   );
 }
 
@@ -166,13 +292,13 @@ export default function App() {
     <>
       <header className="masthead">
         <div className="wrap masthead-inner">
-          <div className="brand">
+          <a className="brand" href="#top" aria-label="News Pulse home">
             <span className="logo" aria-hidden="true" />
             <span className="wordmark">News Pulse</span>
-          </div>
-          <nav className="nav" aria-label="Sections">
-            <a href="#news">Top stories</a>
-            <a href="#trending">Trending</a>
+          </a>
+          <nav className="nav" aria-label="Regions">
+            {REGIONS.map((r) => <a key={r.id} href={`#${r.id}`}>{r.name}</a>)}
+            <a href="#social">Social</a>
           </nav>
           <button className="refresh" onClick={() => load(true)} disabled={loading} aria-label="Refresh">
             <RefreshIcon spinning={loading} />
@@ -181,48 +307,26 @@ export default function App() {
         </div>
       </header>
 
-      <main className="wrap">
-        <div className="dateline">
+      <main className="wrap" id="top">
+        <div className="intro">
           <p className="date">{today}</p>
+          <h1>Today’s briefing</h1>
           <p className="updated">
             <span className="live" aria-hidden="true" />
             {updated ? `Updated ${timeAgo(updated)}` : 'Fetching the latest…'}
+            <span className="dot" aria-hidden="true">·</span>
+            Top stories, searches and social trends
           </p>
         </div>
 
         {error && <p className="banner">Couldn’t load the latest data ({error}). Try refreshing in a moment.</p>}
 
-        <section id="news" className="block">
-          <div className="block-head">
-            <h2>Top stories</h2>
-            <p>The five biggest headlines in each region</p>
-          </div>
-          <div className="grid">
-            {NEWS.map((s) => (
-              <Panel key={s.key} {...s} section={data?.[s.key]} loading={loading} rows={5}>
-                <NewsList items={data?.[s.key]?.items} />
-              </Panel>
-            ))}
-          </div>
-        </section>
-
-        <section id="trending" className="block">
-          <div className="block-head">
-            <h2>Trending searches</h2>
-            <p>What people are searching for on Google right now</p>
-          </div>
-          <div className="grid">
-            {TRENDS.map((s) => (
-              <Panel key={s.key} {...s} section={data?.[s.key]} loading={loading} rows={8}>
-                <TrendList items={data?.[s.key]?.items} />
-              </Panel>
-            ))}
-          </div>
-        </section>
+        {REGIONS.map((r, i) => <Region key={r.id} region={r} index={i} data={data} loading={loading} />)}
+        <Social index={REGIONS.length} data={data} loading={loading} />
       </main>
 
       <footer className="wrap footer">
-        <p>Headlines from Google News · Searches from Google Trends · Refreshed every 30 minutes</p>
+        <p>Headlines: Google News · Searches: Google Trends · Social: X (via trends24.in), Bluesky, YouTube · Trend summaries written by Claude from related headlines · Refreshed every 30 minutes</p>
       </footer>
     </>
   );

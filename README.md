@@ -14,3 +14,8 @@ ranked by number of countries, then by combined search volume.
 Pages is static, so `.github/workflows/deploy.yml` runs `scripts/build-data.js` to snapshot
 all sections into `data.json`, builds the app and deploys it — on every push to `main`,
 every 30 min (cron), or manually via *Actions → Run workflow*.
+
+## Optional keys (GitHub → Settings → Secrets → Actions)
+- `ANTHROPIC_API_KEY` — Claude writes a 2-line "why it's trending" summary for each search trend
+  (only new topics are sent; previous summaries are reused). Without it, the top related headline is shown.
+- `YOUTUBE_API_KEY` — adds a "YouTube · India" most-popular column (YouTube Data API v3, free).
