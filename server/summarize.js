@@ -1,23 +1,32 @@
-// Adds a short "why is this trending" summary to each trend, written by an OpenAI model
-// from the related headlines Google Trends provides.
-// - Summaries are memoized by topic, so a topic that keeps trending is summarized once.
-// - Without OPENAI_API_KEY this is a no-op and the UI falls back to the top headline.
+// Adds a short, simple summary ("explain it like I'm 15") to news stories and search trends,
+// written by an OpenAI model from the headline plus related headlines from other outlets.
+// - Summaries are memoized per item, so a story or trend that stays up is summarized once.
+// - Without OPENAI_API_KEY this is a no-op; the UI then shows no summary for news and the
+//   top related headline for trends.
 import OpenAI from 'openai';
 
 const MODEL = process.env.OPENAI_MODEL || 'gpt-5.4-mini';
-const memo = new Map(); // topic key -> summary
+const memo = new Map(); // "kind:title" -> summary
 
-const keyOf = (t) => t.title.toLowerCase().replace(/\s+/g, ' ').trim();
+const keyOf = (kind, item) => `${kind}:${item.title.toLowerCase().replace(/\s+/g, ' ').trim()}`;
 
-const SYSTEM = `You write context lines for a news dashboard that lists trending Google searches.
-For each topic you get the search term and a few news headlines about it.
-Write a summary of one or two short sentences (at most 170 characters) that tells a reader who or what the topic is and why people are searching for it right now.
+const SYSTEM = `You explain today's news to a curious 15-year-old.
+Each item has:
+- kind: "news" (a news story) or "trend" (something many people are searching for on Google)
+- title: the headline or the search term
+- related: headlines about the same thing from other news outlets
+
+For each item, write a summary of one or two short sentences (at most 180 characters total) in simple, everyday English:
+- news: what happened and why it matters.
+- trend: who or what this is, and why people are searching for it right now.
+
 Rules:
-- Use only facts stated in the headlines. Do not guess or add outside details.
-- Plain, neutral, factual tone. No hype, no emojis, no clickbait.
-- Always write in English, even if the topic or headlines are in Hindi or Marathi (a name may stay in its original script).
-- Do not begin by repeating the search term verbatim; get straight to the point.
-- If the headlines do not clearly explain the trend, summarize what they do say.`;
+- Use only facts stated in the title and related headlines. Never invent names, numbers, causes or outcomes.
+- Explain jargon and abbreviations in plain words (for example "ODI" is a one-day cricket match, "impeach" means formally charge an official).
+- Friendly and clear, but not childish. No slang, no emojis, no hype, no opinions.
+- Do not just repeat the headline; add the context a teenager would need to understand it.
+- Always write in English, even if the input is in Hindi or Marathi (names may stay in their original script).
+- If the headlines do not make it clear, say simply what is known.`;
 
 const SCHEMA = {
   type: 'object',
@@ -36,24 +45,27 @@ const SCHEMA = {
   additionalProperties: false,
 };
 
-/** Pre-load summaries (e.g. from the previously deployed data.json). */
-export function seedSummaries(trends = []) {
-  for (const t of trends) if (t?.title && t.summary) memo.set(keyOf(t), t.summary);
+/** Pre-load summaries (e.g. from the previously deployed data.json). groups: { news: [...], trend: [...] } */
+export function seedSummaries(groups) {
+  for (const [kind, items] of Object.entries(groups)) {
+    for (const it of items ?? []) if (it?.title && it.summary) memo.set(keyOf(kind, it), it.summary);
+  }
 }
 
-/** Mutates trend items in place, adding `summary` where available. */
-export async function addSummaries(trends) {
+/** Mutates items in place, adding `summary`. groups: { news: [...], trend: [...] } */
+export async function addSummaries(groups) {
+  const entries = Object.entries(groups).flatMap(([kind, items]) => (items ?? []).map((item) => ({ kind, item })));
   const apply = () => {
-    for (const t of trends) {
-      const s = memo.get(keyOf(t));
-      if (s) t.summary = s;
+    for (const { kind, item } of entries) {
+      const s = memo.get(keyOf(kind, item));
+      if (s) item.summary = s;
     }
   };
   apply();
 
   if (!process.env.OPENAI_API_KEY) return { generated: 0, skipped: 'OPENAI_API_KEY not set' };
 
-  const todo = [...new Map(trends.filter((t) => !t.summary && t.related?.length).map((t) => [keyOf(t), t])).values()];
+  const todo = [...new Map(entries.filter(({ item }) => !item.summary).map((e) => [keyOf(e.kind, e.item), e])).values()];
   if (!todo.length) return { generated: 0 };
 
   const client = new OpenAI();
@@ -63,9 +75,12 @@ export async function addSummaries(trends) {
       model: MODEL,
       messages: [
         { role: 'system', content: SYSTEM },
-        { role: 'user', content: JSON.stringify(todo.map((t, id) => ({ id, topic: t.title, headlines: t.related }))) },
+        {
+          role: 'user',
+          content: JSON.stringify(todo.map(({ kind, item }, id) => ({ id, kind, title: item.title, related: item.related ?? [] }))),
+        },
       ],
-      response_format: { type: 'json_schema', json_schema: { name: 'trend_summaries', schema: SCHEMA, strict: true } },
+      response_format: { type: 'json_schema', json_schema: { name: 'summaries', schema: SCHEMA, strict: true } },
     });
   } catch (err) {
     if (err instanceof OpenAI.AuthenticationError) console.error('[summaries] invalid OPENAI_API_KEY');
@@ -91,11 +106,12 @@ export async function addSummaries(trends) {
 
   let generated = 0;
   for (const { id, summary } of parsed.summaries ?? []) {
-    if (todo[id] && summary?.trim()) {
-      memo.set(keyOf(todo[id]), summary.trim());
+    const e = todo[id];
+    if (e && summary?.trim()) {
+      memo.set(keyOf(e.kind, e.item), summary.trim());
       generated++;
     }
   }
   apply();
-  return { generated };
+  return { generated, model: MODEL };
 }

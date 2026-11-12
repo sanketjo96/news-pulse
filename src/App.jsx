@@ -92,12 +92,14 @@ function NewsList({ items = [] }) {
     <div className="news">
       <article className="story lead">
         <a href={lead.link} target="_blank" rel="noreferrer"><h4>{lead.title}</h4></a>
+        {lead.summary && <p className="summary">{lead.summary}</p>}
         <Meta story={lead} />
       </article>
       <ol className="stories">
         {rest.map((n, i) => (
           <li key={n.link || i} className="story">
             <a href={n.link} target="_blank" rel="noreferrer"><h4>{n.title}</h4></a>
+            {n.summary && <p className="summary">{n.summary}</p>}
             <Meta story={n} />
           </li>
         ))}
@@ -326,7 +328,7 @@ export default function App() {
       </main>
 
       <footer className="wrap footer">
-        <p>Headlines: Google News · Searches: Google Trends · Social: X (via trends24.in), Bluesky, YouTube · Trend summaries written by AI from related headlines · Refreshed every 30 minutes</p>
+        <p>Headlines: Google News · Searches: Google Trends · Social: X (via trends24.in), Bluesky, YouTube · Plain-English summaries written by AI from related headlines · Refreshed every 30 minutes</p>
       </footer>
     </>
   );

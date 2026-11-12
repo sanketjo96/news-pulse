@@ -26,11 +26,23 @@ async function fetchItems(url) {
   return asArray(parser.parse(await res.text())?.rss?.channel?.item);
 }
 
+const decodeEntities = (s) =>
+  s.replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;|&#x27;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+
+// Google News puts related coverage (headlines from other outlets) in the item description.
+function relatedHeadlines(description, ownTitle) {
+  const own = norm(ownTitle);
+  return [...String(description ?? '').matchAll(/<a [^>]*>([^<]+)<\/a>/g)]
+    .map((m) => decodeEntities(m[1]).trim())
+    .filter((h) => h && norm(h) !== own)
+    .slice(0, 4);
+}
+
 function toNews(item, extra = {}) {
   const source = text(item.source);
   let title = text(item.title);
   if (source && title.endsWith(` - ${source}`)) title = title.slice(0, -(source.length + 3));
-  return { title, source, link: text(item.link), published: text(item.pubDate), ...extra };
+  return { title, source, link: text(item.link), published: text(item.pubDate), related: relatedHeadlines(item.description, title), ...extra };
 }
 
 function dedupe(list, n) {

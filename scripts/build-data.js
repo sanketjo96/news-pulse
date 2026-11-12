@@ -26,9 +26,10 @@ for (const [key, fn] of Object.entries(SECTIONS)) {
   }
 }
 
-const trendKeys = Object.keys(out).filter((k) => k.startsWith('trends'));
-seedSummaries(trendKeys.flatMap((k) => prev[k]?.items ?? []));
-const result = await addSummaries(trendKeys.flatMap((k) => out[k].items));
+const keysOf = (prefix) => Object.keys(out).filter((k) => k.startsWith(prefix));
+const pick = (src, prefix) => keysOf(prefix).flatMap((k) => src[k]?.items ?? []);
+seedSummaries({ news: pick(prev, 'news'), trend: pick(prev, 'trends') });
+const result = await addSummaries({ news: pick(out, 'news'), trend: pick(out, 'trends') });
 console.log('summaries:', JSON.stringify(result));
 
 mkdirSync('public', { recursive: true });
