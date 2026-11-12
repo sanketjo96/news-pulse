@@ -55,11 +55,11 @@ function dedupe(list, n) {
   }).slice(0, n);
 }
 
-export async function getNews(key, n = 5) {
+export async function getNews(key, n = 3) {
   return dedupe((await fetchItems(FEEDS[key])).map((i) => toNews(i)), n);
 }
 
-export async function getLocalNews(n = 5) {
+export async function getLocalNews(n = 3) {
   const [pune, mumbai] = await Promise.allSettled([fetchItems(FEEDS.pune), fetchItems(FEEDS.mumbai)]);
   const p = pune.status === 'fulfilled' ? pune.value.map((i) => toNews(i, { city: 'Pune' })) : [];
   const m = mumbai.status === 'fulfilled' ? mumbai.value.map((i) => toNews(i, { city: 'Mumbai' })) : [];

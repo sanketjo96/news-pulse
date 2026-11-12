@@ -1,6 +1,7 @@
 # News Pulse
 
-Top 5 news (World / India / Pune & Mumbai) and top 10 trending searches (Worldwide / India / Maharashtra).
+Organized by region (World / India / Maharashtra): top 3 news stories and top 3 trending searches each,
+plus a Social media section with X (India) trends and Instagram viral stories.
 
 - `npm run dev` — API on :3001 + Vite on :5173 (proxies `/api`)
 - `npm run build && npm start` — single server on :3001 serving the built app
