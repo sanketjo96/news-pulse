@@ -132,25 +132,6 @@ export async function getWorldTrends(n = 3) {
 const formatNum = (v) => (v >= 1e6 ? `${+(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${+(v / 1e3).toFixed(1)}K` : `${v}`);
 
 // ---------- Social media ----------
-// Bluesky exposes trending topics publicly (no key). X/Instagram have no free trends API.
-export async function getBlueskyTrends(n = 5) {
-  const res = await fetch('https://public.api.bsky.app/xrpc/app.bsky.unspecced.getTrends?limit=10', {
-    headers: { 'User-Agent': UA },
-    signal: AbortSignal.timeout(15000),
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status} from Bluesky`);
-  const { trends = [] } = await res.json();
-  return trends.slice(0, n).map((t) => ({
-    title: t.displayName || t.topic,
-    summary: t.description || '',
-    posts: t.postCount || 0,
-    category: t.category || '',
-    status: t.status || '',
-    link: t.link ? `https://bsky.app${t.link}` : '',
-    platform: 'Bluesky',
-  }));
-}
-
 // X (Twitter) has no free trends API; trends24.in publishes them per location as public HTML.
 // Unofficial: if their markup changes, the section falls back to the last good data.
 async function fetchXTrends(path) {
@@ -182,41 +163,57 @@ async function fetchGetDayTrends(country) {
   return items;
 }
 
-export async function getXTrends(country = 'india', n = 5) {
-  try {
-    return dedupe(await fetchGetDayTrends(country), n);
-  } catch (err) {
-    console.warn(`[x] ${err.message}; trying trends24`);
-    return dedupe(await fetchXTrends(country), n);
+// Turn "#UpperCkt_Ai_Infra_Stock" into "UpperCkt Ai Infra Stock" for a news search.
+const hashtagToWords = (t) => t.replace(/^#/, '').replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').trim();
+
+// Find today's news coverage of an X trend so it can be explained. Only headlines that actually
+// mention the trend's words are kept, to avoid summarizing unrelated stories.
+async function newsForTerm(term) {
+  const words = term.toLowerCase().split(/\s+/).filter((w) => w.length >= 3);
+  const mentions = (title) => {
+    const t = title.toLowerCase();
+    const hits = words.filter((w) => t.includes(w)).length;
+    return words.length ? hits / words.length >= 0.75 : false;
+  };
+  for (const q of [`"${term}" when:1d`, `${term} when:1d`]) {
+    try {
+      const items = (await fetchItems(`https://news.google.com/rss/search?q=${encodeURIComponent(q)}&${GN}`)).map((i) => toNews(i));
+      const relevant = items.filter((n) => mentions(n.title));
+      if (relevant.length) return relevant.slice(0, 4);
+    } catch {}
   }
+  return [];
 }
 
-// Instagram has no public trends data at all, and YouTube needs an API key, so as a stand-in
-// we show today's news coverage of what is going viral on the platform (clearly labelled in the UI).
+export async function getXTrends(country = 'india', n = 5) {
+  let trends;
+  try {
+    trends = dedupe(await fetchGetDayTrends(country), n);
+  } catch (err) {
+    console.warn(`[x] ${err.message}; trying trends24`);
+    trends = dedupe(await fetchXTrends(country), n);
+  }
+  return Promise.all(
+    trends.map(async (t) => {
+      const news = await newsForTerm(hashtagToWords(t.title));
+      const top = news[0];
+      return {
+        ...t,
+        related: news.map((x) => x.title),
+        newsTitle: top?.title || '',
+        newsLink: top?.link || '',
+        newsSource: top?.source || '',
+      };
+    }),
+  );
+}
+
+// Instagram has no public trends data at all, so as a stand-in we show today's news
+// coverage of what is going viral there (clearly labelled in the UI).
 export async function getViralNews(platform, n = 5) {
   const q = encodeURIComponent(`${platform} viral when:1d`);
   const items = await fetchItems(`https://news.google.com/rss/search?q=${q}&${GN}`);
   return dedupe(items.map((i) => toNews(i, { platform: platform, viaNews: true })), n);
-}
-
-// YouTube's official "most popular" chart for a region. Needs a free YOUTUBE_API_KEY
-// (Google Cloud console → enable "YouTube Data API v3" → create API key).
-export async function getYouTubeTrending(region = 'IN', n = 5) {
-  const key = process.env.YOUTUBE_API_KEY;
-  if (!key) throw new Error('YOUTUBE_API_KEY not set');
-  const url = `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&chart=mostPopular&regionCode=${region}&maxResults=${n}&key=${key}`;
-  const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
-  if (!res.ok) throw new Error(`HTTP ${res.status} from YouTube`);
-  const { items = [] } = await res.json();
-  return items.map((v) => ({
-    title: v.snippet?.title || '',
-    channel: v.snippet?.channelTitle || '',
-    views: Number(v.statistics?.viewCount || 0),
-    picture: v.snippet?.thumbnails?.medium?.url || v.snippet?.thumbnails?.default?.url || '',
-    published: v.snippet?.publishedAt || '',
-    link: `https://www.youtube.com/watch?v=${v.id}`,
-    platform: 'YouTube',
-  }));
 }
 
 export const SECTIONS = {
@@ -228,7 +225,4 @@ export const SECTIONS = {
   trendsMaharashtra: () => getTrends('IN-MH'),
   socialX: () => getXTrends('india'),
   socialInstagram: () => getViralNews('Instagram'),
-  // Official "most popular in India" chart with a YouTube key; otherwise news about viral videos.
-  socialYouTube: () => (process.env.YOUTUBE_API_KEY ? getYouTubeTrending('IN') : getViralNews('YouTube')),
-  socialBluesky: () => getBlueskyTrends(),
 };

@@ -148,61 +148,29 @@ function TrendList({ items = [] }) {
   );
 }
 
-const compact = (n) => (n >= 1e7 ? `${+(n / 1e7).toFixed(1)} Cr` : n >= 1e5 ? `${+(n / 1e5).toFixed(1)} L` : n >= 1e3 ? `${+(n / 1e3).toFixed(1)}K` : `${n}`);
-
 function XList({ items = [] }) {
   if (!items.length) return <p className="empty">No trends right now.</p>;
   return (
-    <ol className="social x">
+    <ol className="trends x-trends">
       {items.map((t, i) => (
-        <li key={t.title + i}>
-          <span className="rank">{i + 1}</span>
-          <a href={t.link} target="_blank" rel="noreferrer" className="x-tag">{t.title}</a>
-        </li>
-      ))}
-    </ol>
-  );
-}
-
-function BlueskyList({ items = [] }) {
-  if (!items.length) return <p className="empty">No trends right now.</p>;
-  return (
-    <ol className="social bsky">
-      {items.map((t, i) => (
-        <li key={t.title + i}>
-          <span className="rank">{i + 1}</span>
-          <div>
-            <a href={t.link} target="_blank" rel="noreferrer" className="social-title">{t.title}</a>
+        <li key={t.title + i} className="trend">
+          <div className="x-head">
+            <span className="rank">{i + 1}</span>
+            <a href={t.link} target="_blank" rel="noreferrer" className="x-tag">{t.title}</a>
+          </div>
+          <div className="x-body">
             {t.summary && <p className="context">{t.summary}</p>}
-            <div className="meta">
-              <span className="source">{compact(t.posts)} posts</span>
-              {t.category && <><span className="dot" aria-hidden="true">·</span><span className="cap">{t.category}</span></>}
-              {t.status === 'hot' && <span className="hot">Hot</span>}
+            <div className="x-links">
+              {t.newsLink && (
+                <a className="read-more" href={t.newsLink} target="_blank" rel="noreferrer">
+                  Read on {t.newsSource || 'source'} <span aria-hidden="true">→</span>
+                </a>
+              )}
+              <a className="read-more muted" href={t.link} target="_blank" rel="noreferrer">
+                See posts on X <span aria-hidden="true">→</span>
+              </a>
             </div>
           </div>
-        </li>
-      ))}
-    </ol>
-  );
-}
-
-function YouTubeList({ items = [] }) {
-  if (!items.length) return <p className="empty">No videos right now.</p>;
-  return (
-    <ol className="social yt">
-      {items.map((v, i) => (
-        <li key={v.link}>
-          <a href={v.link} target="_blank" rel="noreferrer" className="yt-row">
-            <img src={v.picture} alt="" loading="lazy" referrerPolicy="no-referrer" />
-            <div>
-              <span className="social-title">{v.title}</span>
-              <div className="meta">
-                <span className="source">{v.channel}</span>
-                <span className="dot" aria-hidden="true">·</span>
-                <span>{compact(v.views)} views</span>
-              </div>
-            </div>
-          </a>
         </li>
       ))}
     </ol>
@@ -225,27 +193,17 @@ function ViralNewsList({ items = [] }) {
 }
 
 const SOCIAL_TABS = [
-  { id: 'x', key: 'socialX', label: 'X', note: () => 'Top trends on X in India right now' },
+  { id: 'x', key: 'socialX', label: 'X', note: 'Top 5 trends on X in India right now, explained' },
   {
     id: 'instagram',
     key: 'socialInstagram',
     label: 'Instagram',
-    note: () => 'Instagram doesn’t share trend data, so these are today’s news stories about what’s going viral on Instagram',
+    note: 'Instagram doesn’t share trend data, so these are today’s news stories about what’s going viral on Instagram',
   },
-  {
-    id: 'youtube',
-    key: 'socialYouTube',
-    label: 'YouTube',
-    note: (items) => (items?.[0]?.views != null ? 'Most popular videos in India right now' : 'Today’s news about viral YouTube videos'),
-  },
-  { id: 'bluesky', key: 'socialBluesky', label: 'Bluesky', note: () => 'Trending topics worldwide' },
 ];
 
 function SocialBody({ tab, items }) {
-  if (tab.id === 'x') return <XList items={items} />;
-  if (tab.id === 'bluesky') return <BlueskyList items={items} />;
-  if (tab.id === 'youtube' && items?.[0]?.views != null) return <YouTubeList items={items} />;
-  return <ViralNewsList items={items} />;
+  return tab.id === 'x' ? <XList items={items} /> : <ViralNewsList items={items} />;
 }
 
 const TAB_STORE = 'news-pulse:social-tab';
@@ -273,7 +231,7 @@ function Social({ index, data, loading }) {
         <span className="region-num">{String(index + 1).padStart(2, '0')}</span>
         <div>
           <h2>Social media</h2>
-          <p>What people are posting, sharing and watching</p>
+          <p>What people are posting and sharing right now</p>
         </div>
       </header>
       <div className="column social-panel">
@@ -294,7 +252,7 @@ function Social({ index, data, loading }) {
           ))}
         </div>
         <div id="social-tabpanel" role="tabpanel" aria-labelledby={`tab-${tab.id}`}>
-          <p className="tab-note">{tab.note(section?.items)}</p>
+          <p className="tab-note">{tab.note}</p>
           {loading && !section ? (
             <Skeleton rows={5} />
           ) : !section?.items?.length ? (
@@ -400,7 +358,7 @@ export default function App() {
       </main>
 
       <footer className="wrap footer">
-        <p>Headlines: Google News · Searches: Google Trends · Social: X (via getdaytrends.com), Google News, YouTube, Bluesky · Plain-English summaries written by AI from related headlines · Refreshed every 30 minutes</p>
+        <p>Headlines: Google News · Searches: Google Trends · Social: X trends via getdaytrends.com, Instagram via Google News · Plain-English summaries written by AI from related headlines · Refreshed every 30 minutes</p>
       </footer>
     </>
   );

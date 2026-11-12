@@ -16,6 +16,5 @@ all sections into `data.json`, builds the app and deploys it — on every push t
 every 30 min (cron), or manually via *Actions → Run workflow*.
 
 ## Optional keys (GitHub → Settings → Secrets → Actions)
-- `GROQ_API_KEY` (free, preferred) or `OPENAI_API_KEY` — an LLM (Groq: `openai/gpt-oss-120b`, override with `GROQ_MODEL`; OpenAI: default `gpt-5.4-mini`; override with an `OPENAI_MODEL` Actions variable) (default `gpt-5.4-mini`; override with an `OPENAI_MODEL` Actions variable) writes a short, plain-English summary (pitched at a 15-year-old) for every news story and search trend
+- `GROQ_API_KEY` (free, preferred) or `OPENAI_API_KEY` — an LLM (Groq: `openai/gpt-oss-120b`, override with `GROQ_MODEL`; OpenAI: default `gpt-5.4-mini`; override with an `OPENAI_MODEL` Actions variable) (default `gpt-5.4-mini`; override with an `OPENAI_MODEL` Actions variable) writes a short, plain-English summary (pitched at a 15-year-old) for every news story, search trend and X trend
   (only new topics are sent; previous summaries are reused). Without it, the top related headline is shown.
-- `YOUTUBE_API_KEY` — adds a "YouTube · India" most-popular column (YouTube Data API v3, free).

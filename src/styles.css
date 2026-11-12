@@ -172,20 +172,6 @@ li:nth-child(-n + 3) > .rank, .trend:nth-child(-n + 3) .rank { color: var(--acce
 .read-more:hover { text-decoration: underline; }
 
 /* ---------- Social ---------- */
-.social { list-style: none; margin: 0; padding: 0; }
-.social li { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--line); align-items: baseline; }
-.social li:last-child { border-bottom: 0; }
-.social-title { font-weight: 650; font-size: 15.5px; line-height: 1.35; color: var(--text); overflow-wrap: anywhere; }
-a.social-title:hover, .yt-row:hover .social-title { color: var(--accent); }
-.social .context { margin-top: 4px; font-size: 15px; }
-.x-tag { font-weight: 600; font-size: 16px; overflow-wrap: anywhere; }
-.x-tag:hover { color: var(--accent); }
-.hot { font-size: 11px; font-weight: 700; color: var(--accent); background: var(--accent-soft); padding: 1px 7px; border-radius: 999px; }
-.social.yt li { grid-template-columns: 1fr; }
-.yt-row { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 12px; align-items: start; }
-.yt-row img { width: 96px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 8px; background: var(--surface-2); }
-.yt-row .social-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-
 /* ---------- Social tabs ---------- */
 .social-panel { padding-top: 14px; }
 .tabs { display: flex; gap: 6px; flex-wrap: wrap; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
@@ -200,11 +186,17 @@ a.social-title:hover, .yt-row:hover .social-title { color: var(--accent); }
 .tab-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dot); }
 .tab-x { --dot: #64748b; }
 .tab-instagram { --dot: #e1306c; }
-.tab-youtube { --dot: #ff0000; }
-.tab-bluesky { --dot: #1185fe; }
 .tab-note { margin: 14px 0 2px; font-size: 13.5px; color: var(--muted); }
 .social-panel .stories .story:first-child { padding-top: 10px; }
 #social-tabpanel { max-width: 780px; }
+.x-head { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 12px; align-items: baseline; }
+.x-tag { font-weight: 650; font-size: 17px; line-height: 1.35; color: var(--text); overflow-wrap: anywhere; }
+.x-tag:hover { color: var(--accent); }
+.x-body { margin-left: 30px; }
+.x-trends .context { margin-left: 0; }
+.x-links { display: flex; flex-wrap: wrap; gap: 4px 18px; }
+.x-links .read-more { margin-left: 0; }
+.read-more.muted { color: var(--muted); }
 
 /* ---------- Loading ---------- */
 .skeleton { padding-top: 14px; }
