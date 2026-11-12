@@ -1,6 +1,6 @@
 // Writes public/data.json with all dashboard sections (used for the static GitHub Pages build).
 // If a section fails, falls back to that section from the previously deployed snapshot (PREV_URL).
-// Trend summaries from the previous snapshot are reused so only new topics are sent to Claude.
+// Trend summaries from the previous snapshot are reused so only new topics are sent to the AI model.
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { SECTIONS } from '../server/feeds.js';
 import { addSummaries, seedSummaries } from '../server/summarize.js';

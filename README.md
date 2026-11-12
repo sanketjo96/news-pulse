@@ -16,6 +16,6 @@ all sections into `data.json`, builds the app and deploys it — on every push t
 every 30 min (cron), or manually via *Actions → Run workflow*.
 
 ## Optional keys (GitHub → Settings → Secrets → Actions)
-- `ANTHROPIC_API_KEY` — Claude writes a 2-line "why it's trending" summary for each search trend
+- `OPENAI_API_KEY` — an OpenAI model (default `gpt-5.4-mini`; override with an `OPENAI_MODEL` Actions variable) writes a 2-line "why it's trending" summary for each search trend
   (only new topics are sent; previous summaries are reused). Without it, the top related headline is shown.
 - `YOUTUBE_API_KEY` — adds a "YouTube · India" most-popular column (YouTube Data API v3, free).

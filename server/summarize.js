@@ -1,10 +1,10 @@
-// Adds a short "why is this trending" summary to each trend, written by Claude
+// Adds a short "why is this trending" summary to each trend, written by an OpenAI model
 // from the related headlines Google Trends provides.
 // - Summaries are memoized by topic, so a topic that keeps trending is summarized once.
-// - Without ANTHROPIC_API_KEY this is a no-op and the UI falls back to the top headline.
-import Anthropic from '@anthropic-ai/sdk';
+// - Without OPENAI_API_KEY this is a no-op and the UI falls back to the top headline.
+import OpenAI from 'openai';
 
-const MODEL = 'claude-opus-5-5';
+const MODEL = process.env.OPENAI_MODEL || 'gpt-5.4-mini';
 const memo = new Map(); // topic key -> summary
 
 const keyOf = (t) => t.title.toLowerCase().replace(/\s+/g, ' ').trim();
@@ -51,46 +51,41 @@ export async function addSummaries(trends) {
   };
   apply();
 
-  if (!process.env.ANTHROPIC_API_KEY) return { generated: 0, skipped: 'ANTHROPIC_API_KEY not set' };
+  if (!process.env.OPENAI_API_KEY) return { generated: 0, skipped: 'OPENAI_API_KEY not set' };
 
   const todo = [...new Map(trends.filter((t) => !t.summary && t.related?.length).map((t) => [keyOf(t), t])).values()];
   if (!todo.length) return { generated: 0 };
 
-  const client = new Anthropic();
-  let response;
+  const client = new OpenAI();
+  let completion;
   try {
-    response = await client.beta.messages.create({
+    completion = await client.chat.completions.create({
       model: MODEL,
-      max_tokens: 8000,
-      betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default',
-      output_config: { effort: 'low', format: { type: 'json_schema', schema: SCHEMA } },
-      system: SYSTEM,
       messages: [
-        {
-          role: 'user',
-          content: JSON.stringify(todo.map((t, id) => ({ id, topic: t.title, headlines: t.related }))),
-        },
+        { role: 'system', content: SYSTEM },
+        { role: 'user', content: JSON.stringify(todo.map((t, id) => ({ id, topic: t.title, headlines: t.related }))) },
       ],
+      response_format: { type: 'json_schema', json_schema: { name: 'trend_summaries', schema: SCHEMA, strict: true } },
     });
   } catch (err) {
-    if (err instanceof Anthropic.AuthenticationError) console.error('[summaries] invalid ANTHROPIC_API_KEY');
-    else if (err instanceof Anthropic.RateLimitError) console.error('[summaries] rate limited');
-    else if (err instanceof Anthropic.APIError) console.error(`[summaries] API error ${err.status}: ${err.message}`);
+    if (err instanceof OpenAI.AuthenticationError) console.error('[summaries] invalid OPENAI_API_KEY');
+    else if (err instanceof OpenAI.RateLimitError) console.error('[summaries] rate limited or out of credits');
+    else if (err instanceof OpenAI.NotFoundError) console.error(`[summaries] model "${MODEL}" not available - set OPENAI_MODEL`);
+    else if (err instanceof OpenAI.APIError) console.error(`[summaries] API error ${err.status}: ${err.message}`);
     else console.error('[summaries]', err.message);
     return { generated: 0, error: true };
   }
 
-  if (response.stop_reason === 'refusal') {
-    console.error('[summaries] request declined:', response.stop_details?.category);
+  const msg = completion.choices?.[0]?.message;
+  if (msg?.refusal) {
+    console.error('[summaries] request refused:', msg.refusal);
     return { generated: 0, error: true };
   }
-  const text = response.content.find((b) => b.type === 'text')?.text;
   let parsed;
   try {
-    parsed = JSON.parse(text);
+    parsed = JSON.parse(msg?.content ?? '');
   } catch {
-    console.error('[summaries] could not parse response (stop_reason:', response.stop_reason + ')');
+    console.error('[summaries] could not parse response (finish_reason:', completion.choices?.[0]?.finish_reason + ')');
     return { generated: 0, error: true };
   }
 

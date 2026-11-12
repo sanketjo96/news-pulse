@@ -326,7 +326,7 @@ export default function App() {
       </main>
 
       <footer className="wrap footer">
-        <p>Headlines: Google News · Searches: Google Trends · Social: X (via trends24.in), Bluesky, YouTube · Trend summaries written by Claude from related headlines · Refreshed every 30 minutes</p>
+        <p>Headlines: Google News · Searches: Google Trends · Social: X (via trends24.in), Bluesky, YouTube · Trend summaries written by AI from related headlines · Refreshed every 30 minutes</p>
       </footer>
     </>
   );
