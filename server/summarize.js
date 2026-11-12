@@ -84,7 +84,7 @@ export async function addSummaries(groups) {
     });
   } catch (err) {
     if (err instanceof OpenAI.AuthenticationError) console.error('[summaries] invalid OPENAI_API_KEY');
-    else if (err instanceof OpenAI.RateLimitError) console.error('[summaries] rate limited or out of credits');
+    else if (err instanceof OpenAI.RateLimitError) console.error(`[summaries] 429 from OpenAI (${err.code || 'rate_limit'}): ${err.message}`);
     else if (err instanceof OpenAI.NotFoundError) console.error(`[summaries] model "${MODEL}" not available - set OPENAI_MODEL`);
     else if (err instanceof OpenAI.APIError) console.error(`[summaries] API error ${err.status}: ${err.message}`);
     else console.error('[summaries]', err.message);
