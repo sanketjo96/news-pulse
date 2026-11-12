@@ -162,7 +162,7 @@ li:nth-child(-n + 3) > .rank, .trend:nth-child(-n + 3) .rank { color: var(--acce
 .volume { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; margin-top: 1px; }
 
 .context {
-  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+  text-wrap: pretty;
   font-family: var(--serif); font-size: 16px; line-height: 1.45; color: var(--text-2);
   margin-top: 8px;
 }

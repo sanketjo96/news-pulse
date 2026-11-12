@@ -97,12 +97,12 @@ function toTrend(item, geo) {
 
 const withLabel = (t) => ({ ...t, traffic: `${formatNum(t.trafficNum)}+${t.geos.length > 1 ? ` · ${t.geos.length} countries` : ''}` });
 
-export async function getTrends(geo, n = 5) {
+export async function getTrends(geo, n = 3) {
   const all = dedupe((await fetchItems(FEEDS.trends(geo))).map((i) => toTrend(i, geo)), Infinity);
   return all.sort((a, b) => b.trafficNum - a.trafficNum).slice(0, n).map(withLabel);
 }
 
-export async function getWorldTrends(n = 5) {
+export async function getWorldTrends(n = 3) {
   const results = await Promise.allSettled(WORLD_GEOS.map((g) => fetchItems(FEEDS.trends(g)).then((items) => items.map((i) => toTrend(i, g)))));
   const merged = new Map();
   for (const r of results) {
